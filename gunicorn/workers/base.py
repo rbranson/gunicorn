@@ -11,7 +11,7 @@ import traceback
 
 
 from gunicorn import util
-from gunicorn.workers.workertmp import WorkerTmp
+from gunicorn.workers.heartbeat import Heartbeat
 from gunicorn.http.errors import InvalidHeader, InvalidHeaderName, \
 InvalidRequestLine, InvalidRequestMethod, InvalidHTTPVersion, \
 LimitRequestLine, LimitRequestHeaders
@@ -46,7 +46,7 @@ class Worker(object):
         self.log = log
         self.debug = cfg.debug
         self.address = self.socket.getsockname()
-        self.tmp = WorkerTmp(cfg)
+        self.heartbeat = Heartbeat() 
 
     def __str__(self):
         return "<Worker %s>" % self.pid
@@ -61,7 +61,7 @@ class Worker(object):
         once every ``self.timeout`` seconds. If you fail in accomplishing
         this task, the master process will murder your workers.
         """
-        self.tmp.notify()
+        self.heartbeat.notify()
 
     def run(self):
         """\
@@ -90,7 +90,6 @@ class Worker(object):
 
         # Prevent fd inherientence
         util.close_on_exec(self.socket)
-        util.close_on_exec(self.tmp.fileno())
 
         self.log.close_on_exec()
 
