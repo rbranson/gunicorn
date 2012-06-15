@@ -16,22 +16,23 @@ import gunicorn.util as util
 import gunicorn.workers.base as base
 
 class SyncWorker(base.Worker):
-
     def run(self):
-        # self.socket appears to lose its blocking status after
-        # we fork in the arbiter. Reset it here.
+        # We use a blocking accept() for this so that the worker properly
+        # enters a sleep state and is only woken up once there is a connection
+        # that has been handed to that worker. This prevents expensive racing
+        # for accept between multiple processes as seen in a select-accept loop
+        # on multi-core systems with a large number of worker processes (>32)
         self.socket.setblocking(1)
-        self.socket.settimeout(1.0)
 
         while self.alive:
-            self.notify()
-
-            # Accept a connection. If we get an error telling us
-            # that no connection is waiting we heartbeat and retry
             try:
+                self.enter_safe_sleep()
                 client, addr = self.socket.accept()
+                self.notify()
+
                 client.setblocking(1)
                 util.close_on_exec(client)
+
                 self.handle(client, addr)
 
                 # Keep processing clients until no one is waiting. This
@@ -39,11 +40,12 @@ class SyncWorker(base.Worker):
                 # process.
                 continue
 
-            except socket.timeout:
-                pass 
             except socket.error, e:
                 if e[0] not in (errno.EAGAIN, errno.ECONNABORTED):
                     raise
+            finally:
+                # Prevents us from getting into a perpetual safe-sleep state
+                self.notify()
 
             # If our parent changed then we shut down.
             if self.ppid != os.getppid():

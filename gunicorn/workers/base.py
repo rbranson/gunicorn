@@ -46,7 +46,7 @@ class Worker(object):
         self.log = log
         self.debug = cfg.debug
         self.address = self.socket.getsockname()
-        self.heartbeat = Heartbeat() 
+        self.heartbeat = Heartbeat()
 
     def __str__(self):
         return "<Worker %s>" % self.pid
@@ -55,6 +55,14 @@ class Worker(object):
     def pid(self):
         return os.getpid()
 
+    def enter_safe_sleep(self):
+        """\
+        If the worker subclass can enter a safe sleep state, run this
+        before going to sleep to prevent the arbiter from killing the
+        worker process.
+        """
+        self.heartbeat.sleep()
+        
     def notify(self):
         """\
         Your worker subclass must arrange to have this method called
